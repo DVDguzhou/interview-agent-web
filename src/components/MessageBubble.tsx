@@ -1,8 +1,3 @@
-/**
- * @author: 公众号：IT杨秀才
- * @doc:后端，AI Agent知识进阶，后端、AI大模型、场景题面试大全：https://golangstar.cn/
- */
-
 import ReactMarkdown from 'react-markdown'
 import type { ChatMessage } from '../types/message'
 import { ScoreCard } from './ScoreCard'
@@ -117,7 +112,12 @@ export function MessageBubble({ msg }: { msg: ChatMessage }) {
           </div>
         )}
         <div className="prose prose-sm max-w-none dark:prose-invert">
-          <ReactMarkdown>{msg.content}</ReactMarkdown>
+          {msg.streaming && !msg.content ? (
+            <span className="text-gray-400 animate-pulse">思考中…</span>
+          ) : (
+            <ReactMarkdown>{msg.content}</ReactMarkdown>
+          )}
+          {msg.streaming && msg.content && <span className="inline-block w-1.5 h-4 bg-gray-400 animate-pulse align-middle" />}
         </div>
       </div>
     </div>

@@ -1,22 +1,23 @@
-/**
- * @author: 公众号：IT杨秀才
- * @doc:后端，AI Agent知识进阶，后端、AI大模型、场景题面试大全：https://golangstar.cn/
- */
+'use client'
 
 import { useEffect, useRef, useState } from 'react'
 import { MessageBubble } from './MessageBubble'
 import { FileUpload } from './FileUpload'
 import { StageIndicator } from './StageIndicator'
-import { useChatStore } from '../store/chatStore'
-import type { WSClient } from '../api/ws'
+import { useWS } from './AppShell'
+import { useChatStore, nextId } from '../store/chatStore'
+import { useAuthStore } from '../store/authStore'
+import { streamChat } from '../api/chatStream'
 import type { ClientMessage } from '../types/message'
 
-interface ChatWindowProps {
-  wsRef: React.RefObject<WSClient | null>
-}
-
-export function ChatWindow({ wsRef }: ChatWindowProps) {
-  const { messages, isInterviewing } = useChatStore()
+export function ChatWindow() {
+  const wsRef = useWS()
+  const messages = useChatStore((s) => s.messages)
+  const isInterviewing = useChatStore((s) => s.isInterviewing)
+  const conversationId = useChatStore((s) => s.conversationId)
+  const token = useAuthStore((s) => s.token)
+  const [streaming, setStreaming] = useState(false)
+  const abortRef = useRef<AbortController | null>(null)
   const [input, setInput] = useState('')
   const [attachedFile, setAttachedFile] = useState<{ name: string; data: string } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -32,6 +33,25 @@ export function ChatWindow({ wsRef }: ChatWindowProps) {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  useEffect(() => () => abortRef.current?.abort(), [])
+
+  /** 日常对话走 SSE 流式输出：先插入空的助手消息，再逐段追加 */
+  const sendStreaming = async (text: string) => {
+    const { addMessage, updateMessage } = useChatStore.getState()
+    const id = nextId()
+    addMessage({ id, role: 'assistant', content: '', messageType: 'text', timestamp: Date.now(), streaming: true })
+    setStreaming(true)
+    const controller = new AbortController()
+    abortRef.current = controller
+    await streamChat(text, conversationId, token, {
+      onDelta: (delta) => updateMessage(id, (m) => ({ content: m.content + delta })),
+      onDone: (full) => updateMessage(id, { content: full, streaming: false }),
+      onError: (message) =>
+        updateMessage(id, (m) => ({ content: m.content ? `${m.content}\n\n> ⚠️ ${message}` : `⚠️ ${message}`, streaming: false })),
+    }, controller.signal).catch(() => updateMessage(id, { streaming: false }))
+    setStreaming(false)
+  }
 
   const send = (msg: ClientMessage) => {
     wsRef.current?.send(msg)
@@ -51,28 +71,28 @@ export function ChatWindow({ wsRef }: ChatWindowProps) {
 
   const handleSend = () => {
     const text = input.trim()
-    if (!text && !attachedFile) return
-
-    if (isInterviewing) {
-      send({ type: 'answer', content: text })
-    } else if (attachedFile) {
-      // 带附件的消息：文件内容 + 文本一起发送
-      const content = `[FILE:${attachedFile.name}]${attachedFile.data}` + (text ? `\n${text}` : '')
-      send({ type: 'chat', content })
-    } else {
-      send({ type: 'chat', content: text })
-    }
+    if ((!text && !attachedFile) || streaming) return
 
     const displayText = attachedFile
       ? `${attachedFile.name}${text ? '\n' + text : ''}`
       : text
     useChatStore.getState().addMessage({
-      id: String(Date.now()),
+      id: nextId(),
       role: 'user',
       content: displayText,
       messageType: attachedFile ? 'file' : 'text',
       timestamp: Date.now(),
     })
+
+    if (isInterviewing) {
+      send({ type: 'answer', content: text })
+    } else if (attachedFile) {
+      // 带附件的消息：文件内容 + 文本一起经 WebSocket 发送（后端解析文件）
+      const content = `[FILE:${attachedFile.name}]${attachedFile.data}` + (text ? `\n${text}` : '')
+      send({ type: 'chat', content })
+    } else {
+      void sendStreaming(text)
+    }
     setInput('')
     setAttachedFile(null)
   }
@@ -93,7 +113,7 @@ export function ChatWindow({ wsRef }: ChatWindowProps) {
       const base64 = (reader.result as string).split(',')[1]
       send({ type: 'upload_questions', filename: file.name, data: base64 })
       useChatStore.getState().addMessage({
-        id: String(Date.now()),
+        id: nextId(),
         role: 'user',
         content: `上传题库：${file.name}`,
         messageType: 'file',
@@ -113,7 +133,7 @@ export function ChatWindow({ wsRef }: ChatWindowProps) {
     send({ type: 'start_interview', jd, resume })
     useChatStore.getState().setInterviewing(true)
     useChatStore.getState().addMessage({
-      id: String(Date.now()),
+      id: nextId(),
       role: 'user',
       content: '开始面试',
       messageType: 'text',
@@ -281,7 +301,7 @@ export function ChatWindow({ wsRef }: ChatWindowProps) {
           />
           <button
             onClick={handleSend}
-            disabled={!input.trim() && !attachedFile}
+            disabled={(!input.trim() && !attachedFile) || streaming}
             className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50"
           >
             发送

@@ -1,9 +1,5 @@
-/**
- * @author: 公众号：IT杨秀才
- * @doc:后端，AI Agent知识进阶，后端、AI大模型、场景题面试大全：https://golangstar.cn/
- */
-
 import type { ClientMessage, ServerMessage } from '../types/message'
+import { wsUrl } from '../lib/config'
 
 export class WSClient {
   private ws: WebSocket | null = null
@@ -24,10 +20,7 @@ export class WSClient {
     if (token) {
       this.token = token
     }
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const params = this.token ? `?token=${encodeURIComponent(this.token)}` : ''
-    const url = `${protocol}//${window.location.host}/ws${params}`
-    this.ws = new WebSocket(url)
+    this.ws = new WebSocket(wsUrl(this.token))
 
     this.ws.onopen = () => {
       this.onStatusChange(true)

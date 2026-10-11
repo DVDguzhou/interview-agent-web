@@ -1,8 +1,3 @@
-/**
- * @author: 公众号：IT杨秀才
- * @doc:后端，AI Agent知识进阶，后端、AI大模型、场景题面试大全：https://golangstar.cn/
- */
-
 // 客户端发送的消息
 export type ClientMessage =
   | { type: 'chat'; content: string }
@@ -57,4 +52,5 @@ export interface ChatMessage {
   questionNum?: number
   stage?: string
   ragEvaluation?: RAGEvaluation
+  streaming?: boolean
 }

@@ -1,8 +1,3 @@
-/**
- * @author: 公众号：IT杨秀才
- * @doc:后端，AI Agent知识进阶，后端、AI大模型、场景题面试大全：https://golangstar.cn/
- */
-
 import { create } from 'zustand'
 import type { ChatMessage, ServerMessage } from '../types/message'
 
@@ -11,8 +6,10 @@ interface ChatState {
   connected: boolean
   isInterviewing: boolean
   currentStage: string
+  conversationId: string
 
   addMessage: (msg: ChatMessage) => void
+  updateMessage: (id: string, patch: Partial<ChatMessage> | ((m: ChatMessage) => Partial<ChatMessage>)) => void
   setConnected: (v: boolean) => void
   setInterviewing: (v: boolean) => void
   handleServerMessage: (msg: ServerMessage) => void
@@ -20,21 +17,30 @@ interface ChatState {
 }
 
 let msgId = 0
-const nextId = () => String(++msgId)
+export const nextId = () => `m${++msgId}`
+const newConversationId = () =>
+  typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `c${Date.now()}`
 
 export const useChatStore = create<ChatState>((set, get) => ({
   messages: [],
   connected: false,
   isInterviewing: false,
   currentStage: '',
+  conversationId: newConversationId(),
 
   addMessage: (msg) => set((s) => ({ messages: [...s.messages, msg] })),
+
+  updateMessage: (id, patch) =>
+    set((s) => ({
+      messages: s.messages.map((m) => (m.id === id ? { ...m, ...(typeof patch === 'function' ? patch(m) : patch) } : m)),
+    })),
 
   setConnected: (connected) => set({ connected }),
 
   setInterviewing: (v) => set({ isInterviewing: v }),
 
-  clearMessages: () => set({ messages: [] }),
+  // 新建对话：清空消息并切换会话 ID（后端按会话隔离短期记忆）
+  clearMessages: () => set({ messages: [], conversationId: newConversationId() }),
 
   handleServerMessage: (msg) => {
     const now = Date.now()
