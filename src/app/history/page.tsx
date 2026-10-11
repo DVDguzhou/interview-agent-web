@@ -166,7 +166,7 @@ function Detail({ record, average, onClose }: { record: InterviewRecord; average
   const dims = report?.dimension_score ?? record.dimension_score ?? {}
   return (
     <div className="fixed inset-0 bg-black/30 flex justify-end z-50" onClick={onClose}>
-      <div className="w-[640px] h-full bg-white overflow-y-auto p-6 space-y-5" onClick={(e) => e.stopPropagation()}>
+      <div className="w-160 h-full bg-white overflow-y-auto p-6 space-y-5" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between">
           <div>
             <h3 className="text-lg font-bold text-gray-800">{record.position || '面试报告'}</h3>
